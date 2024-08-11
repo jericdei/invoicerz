@@ -9,6 +9,8 @@ libre.convertAsync = require("util").promisify(libre.convert);
 export async function POST(request: Request) {
   const data = await request.json();
 
+  console.log("INPUT >> ", data);
+
   const inputPath = path.join(process.cwd(), "src/templates/invoice.docx");
 
   const template = fs.readFileSync(inputPath);
@@ -17,10 +19,19 @@ export async function POST(request: Request) {
     template,
     cmdDelimiter: ["{", "}"],
     data: {
-      date: format(data.date, "MMMM dd, yyyy"),
+      date: format(
+        new Date(data.date).toLocaleDateString("en-PH"),
+        "MMMM dd, yyyy"
+      ),
       invoice_no: data.invoice_no,
-      from: format(data.from, "MMMM dd, yyyy"),
-      to: format(data.to, "MMMM dd, yyyy"),
+      from: format(
+        new Date(data.from).toLocaleDateString("en-PH"),
+        "MMMM dd, yyyy"
+      ),
+      to: format(
+        new Date(data.to).toLocaleDateString("en-PH"),
+        "MMMM dd, yyyy"
+      ),
       amount: new Intl.NumberFormat("en-PH").format(data.amount),
     },
   });
