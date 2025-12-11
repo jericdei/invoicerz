@@ -1,15 +1,17 @@
 "use client";
 
-import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import Datepicker from "./ui/datepicker";
-import { Control, Controller, useForm } from "react-hook-form";
+import { Control, Controller, FieldPath, useForm } from "react-hook-form";
+import { useToast } from "@/hooks/use-toast";
+import { revalidatePath } from "next/cache";
+import { Input } from "./ui/input";
+import { generateInvoice } from "@/actions/invoice-actions";
+
+const DEFAULT_AMOUNT = 42_500;
 
 export type Inputs = {
-  invoice_no: number;
   date: Date;
-  from: Date;
-  to: Date;
   amount: number;
 };
 
@@ -18,7 +20,7 @@ function InputDatepicker({
   control,
   label,
 }: {
-  name: keyof Inputs;
+  name: FieldPath<Inputs>;
   control: Control<Inputs>;
   label: string;
 }) {
@@ -26,11 +28,12 @@ function InputDatepicker({
     <Controller
       name={name}
       control={control}
+      defaultValue={new Date()}
       rules={{ required: true }}
       render={({ field }) => (
         <Datepicker
           placeholder={label}
-          selected={field.value as Date}
+          selected={new Date(field.value)}
           onChange={(date) => field.onChange(date)}
         />
       )}
@@ -39,52 +42,50 @@ function InputDatepicker({
 }
 
 export default function InvoiceForm() {
-  const { register, handleSubmit, control, formState } = useForm<Inputs>();
+  const { handleSubmit, control, formState, register } = useForm<Inputs>({
+    defaultValues: {
+      amount: DEFAULT_AMOUNT,
+      date: new Date(),
+    },
+  });
+
+  const { toast } = useToast();
 
   const onSubmit = async (data: Inputs) => {
-    const response = await fetch("/api/invoice", {
-      method: "POST",
-      body: JSON.stringify(data),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+    try {
+      const result = await generateInvoice(data);
 
-    if (!response.ok) {
-      console.error(response);
+      toast({
+        title: "Success",
+        description: result.message,
+      });
+
+      setTimeout(() => {
+        window.open(`/invoice/${result.invoiceId}`, "_blank");
+      }, 1000);
+    } catch (error) {
+      if (error instanceof Error) {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
     }
-
-    response.blob().then((blob) => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.click();
-    });
   };
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <div className="flex flex-col gap-4 font-sans">
-        <Input
-          type="number"
-          placeholder="Invoice #"
-          {...register("invoice_no", { valueAsNumber: true, required: true })}
-        />
-
         <InputDatepicker name="date" control={control} label="Date" />
-        <InputDatepicker name="from" control={control} label="From" />
-        <InputDatepicker name="to" control={control} label="To" />
-        <Input
-          type="number"
-          placeholder="Amount"
-          {...register("amount", { required: true })}
-        />
+
+        <Input {...register("amount")} placeholder="Amount" />
 
         <Button
           isLoading={formState.isSubmitting}
           disabled={!formState.isValid || formState.isSubmitting}
         >
-          Create
+          Generate Invoice
         </Button>
       </div>
     </form>
